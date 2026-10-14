@@ -1,0 +1,52 @@
+[project]
+name = "py-fast-report-comparator"
+version = "0.1.0"
+description = "A python app to compare two fast report files against each other to see the differences in them more clearly."
+requires-python = ">=3.11"
+
+
+license = { text = "MIT" }
+
+dependencies = [
+
+    "pyside6",
+
+]
+
+[project.scripts]
+py-fast-report-comparator = "src.main:main"
+main = "src.main:main"
+test = "pytest:main"
+build = "src.build:main"
+format = "src.tools:format_code"
+lint = "src.tools:lint_code"
+
+
+main = "src.main:main"
+
+test = "pytest:main"
+
+build = "src.build:main"
+
+format = "src.tools:format_code"
+
+lint = "src.tools:lint_code"
+
+
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+    "pyinstaller>=6.0",
+    "ruff>=0.6",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src"]
+
+[tool.ruff]
+line-length = 100

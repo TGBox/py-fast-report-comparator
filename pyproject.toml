@@ -1,6 +1,6 @@
 [project]
 name = "py-fast-report-comparator"
-version = "1.0.0"
+version = "1.0.1"
 description = "A python app to compare two fast report files against each other to see the differences in them more clearly."
 requires-python = ">=3.11"
 license = { text = "MIT" }

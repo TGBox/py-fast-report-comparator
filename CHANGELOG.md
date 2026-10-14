@@ -1,8 +1,12 @@
 # Changelog
 
+## SemVer v1.0.1
+
+- 2026-10-14 (a3a551c): fix: update gitignore
+
 ## SemVer v1.0.0
 
-- 2026-10-14 (af49da5): feat: add new fast report rendering engine from the cur-delphi repository to allow for accurate previews
+- 2026-10-14 (516f16d): feat: add new fast report rendering engine from the cur-delphi repository to allow for accurate previews
 
 ## SemVer v0.2.0
 

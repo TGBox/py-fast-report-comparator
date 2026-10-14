@@ -33,6 +33,7 @@ uv run build
 | Unterschied ansehen | In der Liste anklicken – beide Vorschauen springen zum Objekt, Details (inkl. Zeilen-Diff bei Skript/SQL) unten links |
 | Filtern | Häkchen *Inhalt*, *Layout*, *Metadaten* |
 | Zoomen | `Strg` + Mausrad (beide Seiten zoomen mit) |
+| Exakte Druckansicht | Schalter *Druckansicht* – rendert mit der echten FastReport-Engine (einmalig `delphi/FrxRender` bauen, siehe [README](delphi/FrxRender/README.md)) |
 | Vollbild | `F11` |
 
 Farben in der Vorschau: **grün** neu in B, **rot** entfernt in B, **gelb** geändert.
@@ -42,8 +43,9 @@ Bewusst nicht enthalten: pixelgenaues Rendering, Skriptausführung, Barcodes (Pl
 ## Projektstruktur
 
 ```
-src/        main.py (Fenster) · preview.py (Vorschau) · parser.py · differ.py · explain.py · fakedata.py · units.py
+src/        main.py (Fenster) · preview.py (Vorschau) · printpreview.py (Druckansicht) · parser.py · differ.py · explain.py · fakedata.py · units.py
 tests/      pytest, inkl. Golden-Tests gegen testdata/
 docs/       SPEC.md, intent/
+delphi/     FrxRender – Render-Hilfsprogramm mit der echten FastReport-Engine
 tasks/      plan.md, todo.md
 ```

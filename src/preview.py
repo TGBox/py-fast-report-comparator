@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import re
+from pathlib import Path
 
-from PySide6.QtCore import QPointF, QRectF, Qt, Signal
-from PySide6.QtGui import QBrush, QColor, QFont, QPainter, QPen, QWheelEvent
+from PySide6.QtCore import QPointF, QRectF, QSize, Qt, Signal
+from PySide6.QtGui import QBrush, QColor, QFont, QPainter, QPen, QPixmap, QWheelEvent
+from PySide6.QtPdf import QPdfDocument
 from PySide6.QtWidgets import (
     QGraphicsDropShadowEffect,
     QGraphicsItem,
@@ -270,13 +272,48 @@ class PreviewView(QGraphicsView):
         self.focus_color = QColor("#5B4BB7")
 
     def show_report(self, report: Node | None, marks: dict[str, str], placeholder: str) -> None:
-        self._focus = None
         if report is None:
-            scene = QGraphicsScene()
-            hint = scene.addSimpleText(placeholder, QFont("Segoe UI", 11))
-            hint.setBrush(QBrush(LABEL_COLOR))
+            self.show_message(placeholder)
         else:
-            scene = ReportScene(report, marks)
+            self._show(ReportScene(report, marks))
+
+    def show_message(self, text: str) -> None:
+        scene = QGraphicsScene()
+        hint = scene.addSimpleText(text, QFont("Segoe UI", 11))
+        hint.setBrush(QBrush(LABEL_COLOR))
+        self._show(scene)
+
+    def show_pdf(self, pdf: Path) -> None:
+        """Exact print preview: the pages FrxRender.exe produced, at the sketch's scale."""
+        document = QPdfDocument(self)
+        document.load(str(pdf))
+        scene = QGraphicsScene()
+        y = 0.0
+        for page in range(document.pageCount()):
+            size = document.pagePointSize(page)
+            width, height = size.width() * 96 / 72, size.height() * 96 / 72  # same px as sketch
+            sheet = scene.addRect(
+                QRectF(0, y, width, height), QPen(Qt.PenStyle.NoPen), QBrush(QColor("white"))
+            )
+            shadow = QGraphicsDropShadowEffect()
+            shadow.setBlurRadius(18)
+            shadow.setOffset(0, 3)
+            shadow.setColor(QColor(0, 0, 0, 60))
+            sheet.setGraphicsEffect(shadow)
+            image = document.render(page, QSize(int(width * 2), int(height * 2)))  # 2x: crisp
+            item = scene.addPixmap(QPixmap.fromImage(image))
+            item.setTransformationMode(Qt.TransformationMode.SmoothTransformation)
+            item.setScale(0.5)
+            item.setPos(0, y)
+            y += height + PAGE_GAP
+        document.close()
+        if y == 0:
+            self.show_message(f"„{pdf.name}“ enthält keine Seiten.")
+            return
+        self._show(scene)
+
+    def _show(self, scene: QGraphicsScene) -> None:
+        self._focus = None
         self._scene = scene  # keep a Python reference alive
         self.setScene(scene)
         self.setSceneRect(scene.itemsBoundingRect().adjusted(-24, -24, 24, 24))

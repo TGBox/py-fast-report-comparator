@@ -25,3 +25,9 @@
 ### Checkpoint: Erfolgskriterien 1–7 manuell abgenommen
 - [ ] `uv run pytest` inkl. `test_ui_smoke.py` auf Windows grün (Qt im Entwicklungs-Container nicht verfügbar)
 - [ ] Daniel prüft Vorschau und Liste an echten Paaren
+
+## Phase 3: Exakte Druckansicht
+- [x] T10 `printpreview.py` – Fake-SQLite je Abfrage, Aufruf FrxRender.exe (Tests: `tests/test_printpreview.py`)
+- [x] T11 `delphi/FrxRender/FrxRender.dpr` – Konsolen-Renderer (echte Engine → PDF)
+- [x] T12 Schalter *Druckansicht* in der UI, PDF-Seiten via QtPdf
+- [ ] T13 Daniel: FrxRender in Delphi 12 kompilieren, an allen 6 Testpaaren prüfen

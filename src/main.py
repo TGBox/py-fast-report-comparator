@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import difflib
 import sys
+import tempfile
 from pathlib import Path
 
 from PySide6.QtCore import QSettings, Qt, QThread, Signal
@@ -36,6 +37,7 @@ from src.differ import Difference, diff_reports
 from src.explain import OBJECT_NAMES, explain, object_label
 from src.parser import Node, parse_report
 from src.preview import MARK_COLORS, PreviewView
+from src.printpreview import RenderError, find_renderer, render_pdf
 
 APP_NAME = "FastReport-Vergleich"
 CATEGORIES = {"content": "Inhalt", "layout": "Layout", "meta": "Metadaten"}
@@ -121,6 +123,31 @@ class CompareThread(QThread):
         self.done.emit(a, b, differences)
 
 
+class RenderThread(QThread):
+    """Runs FrxRender.exe for both templates (the real FastReport engine)."""
+
+    done = Signal(object)  # list[Path | None], one PDF per side
+    failed = Signal(str)
+
+    def __init__(self, exe: Path, paths: list[Path | None], reports: list[Node | None]):
+        super().__init__()
+        self.exe, self.paths, self.reports = exe, paths, reports
+
+    def run(self) -> None:
+        pdfs: list[Path | None] = []
+        for side, (path, report) in enumerate(zip(self.paths, self.reports, strict=True)):
+            if path is None or report is None:
+                pdfs.append(None)
+                continue
+            work_dir = Path(tempfile.gettempdir()) / "fr3-vergleich" / "AB"[side]
+            try:
+                pdfs.append(render_pdf(self.exe, path, report, work_dir))
+            except RenderError as error:
+                self.failed.emit(str(error))
+                return
+        self.done.emit(pdfs)
+
+
 def _location_label(key: str) -> str:
     return {"Data": "Datenseite"}.get(key) or OBJECT_NAMES.get(key, key)
 
@@ -135,6 +162,8 @@ class MainWindow(QMainWindow):
         self.reports: list[Node | None] = [None, None]
         self.differences: list[Difference] = []
         self._worker: CompareThread | None = None
+        self._renderer: RenderThread | None = None
+        self.marks: list[dict[str, str]] = [{}, {}]
         self._syncing = False  # guards the A<->B scroll/zoom mirroring against feedback
         self._build_ui()
         self._restore()
@@ -167,6 +196,10 @@ class MainWindow(QMainWindow):
             self.filters[key] = box
             bar.addWidget(box)
         bar.addSeparator()
+        self.print_action = QAction("Druckansicht", self, checkable=True)
+        self.print_action.setToolTip("Exakt wie gedruckt (echte FastReport-Engine, Fake-Daten)")
+        self.print_action.toggled.connect(self._show_previews)
+        bar.addAction(self.print_action)
         self.theme_action = QAction("Dunkles Design", self, checkable=True)
         self.theme_action.toggled.connect(self._apply_theme)
         bar.addAction(self.theme_action)
@@ -265,8 +298,9 @@ class MainWindow(QMainWindow):
             self.paths = [Path(p) if p and Path(p).is_file() else None for p in stored]
 
     def closeEvent(self, event) -> None:
-        if self._worker is not None:
-            self._worker.wait()
+        for worker in (self._worker, self._renderer):
+            if worker is not None:
+                worker.wait()
         s = self.settings
         s.setValue("geometry", self.saveGeometry())
         s.setValue("mainSplit", self.main_split.saveState())
@@ -354,17 +388,73 @@ class MainWindow(QMainWindow):
             for d in differences
             if d.obj_b and d.path
         }
-        for side, (report, marks) in enumerate(((a, marks_a), (b, marks_b))):
-            self.previews[side].show_report(
-                report,
-                marks,
-                f"Vorlage {'AB'[side]} hierher ziehen oder mit Strg+{side + 1} öffnen.",
-            )
+        self.marks = [marks_a, marks_b]
+        self._show_previews()
         self._fill_tree()
         if a and b:
             self.statusBar().showMessage("Vergleich abgeschlossen.", 4000)
         else:
             self.statusBar().showMessage("Wähle eine zweite Vorlage, um zu vergleichen.")
+
+    # -- previews -----------------------------------------------------------
+    def _show_previews(self) -> None:
+        if self.print_action.isChecked():
+            self._start_print_preview()
+            return
+        for side, view in enumerate(self.previews):
+            view.show_report(
+                self.reports[side],
+                self.marks[side],
+                f"Vorlage {'AB'[side]} hierher ziehen oder mit Strg+{side + 1} öffnen.",
+            )
+
+    def _renderer_path(self) -> Path | None:
+        exe = find_renderer(self.settings.value("frxRenderExe", "") or None)
+        if exe is None:
+            name, _ = QFileDialog.getOpenFileName(
+                self,
+                "FrxRender.exe auswählen (siehe delphi/FrxRender/README.md)",
+                "",
+                "FrxRender (FrxRender.exe)",
+            )
+            exe = Path(name) if name else None
+            if exe:
+                self.settings.setValue("frxRenderExe", str(exe))
+        return exe
+
+    def _start_print_preview(self) -> None:
+        exe = self._renderer_path()
+        if exe is None:
+            self.statusBar().showMessage(
+                "Für die Druckansicht wird FrxRender.exe benötigt – "
+                "Anleitung in delphi/FrxRender/README.md."
+            )
+            self.print_action.setChecked(False)  # back to the sketch
+            return
+        for view in self.previews:
+            view.show_message("Druckansicht wird erzeugt …")
+        if self._renderer is not None:
+            self._renderer.wait()
+        self._renderer = RenderThread(exe, list(self.paths), list(self.reports))
+        self._renderer.done.connect(self._on_rendered)
+        self._renderer.failed.connect(self._on_render_failed)
+        self._renderer.start()
+
+    def _on_rendered(self, pdfs: list[Path | None]) -> None:
+        if not self.print_action.isChecked():
+            return  # user switched back meanwhile
+        for side, (view, pdf) in enumerate(zip(self.previews, pdfs, strict=True)):
+            if pdf is None:
+                view.show_message(f"Keine Vorlage {'AB'[side]} geladen.")
+            else:
+                view.show_pdf(pdf)
+        self.statusBar().showMessage("Druckansicht mit Fake-Daten erzeugt.", 4000)
+
+    def _on_render_failed(self, message: str) -> None:
+        for view in self.previews:
+            view.show_message("Druckansicht nicht möglich – Details unten links.")
+        self.detail.setPlainText(message)
+        self.statusBar().showMessage(message)
 
     # -- difference list ----------------------------------------------------
     def _fill_tree(self) -> None:

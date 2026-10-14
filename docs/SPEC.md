@@ -32,6 +32,15 @@ Daniel vergleicht im Support FastReport-VCL-Vorlagen (`.fr3`): Standardvorlage �
   - `ReportOptions.LastChange`/`CreateDate` → Kategorie Metadaten.
 - Farben: Delphi-`TColor` (BGR-Integer, negative Werte = Systemfarben, z. B. `-16777208` = clWindowText ≈ Schwarz). `Font.Style` ist Bitmaske (1 fett, 2 kursiv, 4 unterstrichen, 8 durchgestrichen). `Frame.Typ` Bitmaske (1 links, 2 rechts, 4 oben, 8 unten).
 
+## Erweiterung: exakte Druckansicht (2026-10-14)
+
+Zusätzlich zur Skizze gibt es den Schalter **Druckansicht**: beide Vorlagen werden mit der echten FastReport-VCL-Engine gerendert und als Seitenbilder nebeneinander gezeigt.
+
+- `delphi/FrxRender/FrxRender.dpr` (Delphi 12, FastReport 2025, nutzt `cur-delphi/Library/FastReportAddFunctions.pas`): lädt die `.fr3`, hängt alle `TfrxFDQuery` an eine SQLite-Datei, ersetzt ihr SQL durch `SELECT * FROM <Abfrage>` (Parameter bleiben als Platzhalter erhalten), setzt `ids`/`sql`/`firmenname`/`params` leer, ruft `PrepareReport` und exportiert PDF.
+- `src/printpreview.py`: erzeugt die SQLite-Datei mit **Offline-Fake-Daten** (je Abfrage eine Tabelle mit den Feldern aus `FieldDefs`, typisiert; Listen 3 Zeilen, Einzeldatensätze 1 Zeile), ruft `FrxRender.exe` auf.
+- Anzeige über `QtPdf` im selben Maßstab wie die Skizze; Scroll/Zoom bleiben synchron.
+- Grenzen: SQL-Logik der Vorlage wirkt nicht (Daten sind fest), Upload-Bilder fehlen, Unterschieds-Markierungen nur in der Skizze.
+
 ## Tech Stack
 
 - Python ≥ 3.12, PySide6 (vorhanden). **Keine weiteren Laufzeit-Abhängigkeiten**: `xml.etree.ElementTree`, `difflib`, `dataclasses` aus der Standardbibliothek. Fake-Daten per eigener Tabelle (kein Faker).
@@ -58,6 +67,7 @@ src/
   differ.py          → Knotenbaum × Knotenbaum → list[Difference], Rauschregeln (kein Qt)
   explain.py         → Difference → deutscher Satz (kein Qt)
   fakedata.py        → [Ausdruck] → Fake-Wert (kein Qt)
+  printpreview.py    → Fake-SQLite + Aufruf FrxRender.exe (Druckansicht)
   units.py           → px↔mm, Delphi-Farben/-Datum, Font-/Frame-Bitmasken (kein Qt)
 tests/
   test_units.py, test_parser.py, test_differ.py, test_explain.py, test_fakedata.py
